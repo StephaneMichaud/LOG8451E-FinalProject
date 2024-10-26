@@ -1,6 +1,8 @@
 key_pair_name: "log8415E-tp3-key-pair"
 security_group_name: "log8415E-tp3-security-group"
 default_region:  "us-east-1"
+bucket_name: "log8451e-tp3"
+
 db_instances:
   db_worker_instance_type: "t2.micro"
   db_worker_instance_ami: "ami-0022f774911c1d690"

@@ -8,7 +8,7 @@ def load_credentials(dotenv_path):
     aws_access_key_id = config.get('default', 'aws_access_key_id')
     aws_secret_access_key = config.get('default', 'aws_secret_access_key')
     aws_session_token = config.get('default', 'aws_session_token')
-    aws_region = config.get("us-east-1", 'aws_region')
+    aws_region = config.get("default", 'aws_region', fallback='us-east-1')
 
     # Set up AWS credentials
     os.environ['AWS_ACCESS_KEY_ID'] = aws_access_key_id

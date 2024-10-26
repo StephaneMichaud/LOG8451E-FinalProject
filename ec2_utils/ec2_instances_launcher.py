@@ -2,6 +2,7 @@
 def launch_ec2_instance(ec2, 
                     key_pair_name, 
                     security_group_id,
+                    subnet_id,
                     instance_type:str = "t2.micro", 
                     num_instances:int = 1, 
                     image_id:str =  "ami-0e86e20dae9224db8",
@@ -20,6 +21,7 @@ def launch_ec2_instance(ec2,
         'NetworkInterfaces': [{
             'AssociatePublicIpAddress': public_ip,
             'DeviceIndex': 0,
+            'SubnetId': subnet_id,
             'Groups': [security_group_id]
         }],
     }
