@@ -10,42 +10,7 @@ aws configure set aws_secret_access_key {aws_secret_access_key}
 aws configure set aws_session_token {aws_session_token}
 aws configure set region {region}
 
-aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:MY-SQL
-
-
 sudo apt-get update && sudo apt-get upgrade -y
-
-# Install MySQL
-sudo apt-get install mysql-server mysql-client -y
-sudo apt-get update && sudo apt-get upgrade -y
-sudo mysql_secure_installation <<EOF
-
-N
-N
-N
-N
-N
-EOF
-
-# Execute the script to install Sakila
-aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:Sakila
-#   Download MySQL tar from the web
-wget https://downloads.mysql.com/docs/sakila-db.tar.gz
-#   Unzip the downloaded file
-tar -xvzf sakila-db.tar.gz
-sudo mysql -u root --password="" < sakila-db/sakila-schema.sql
-sudo mysql -u root --password="" < sakila-db/sakila-data.sql
-
-
-
-#run mysql benchmark
-aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:SQL-BENCHMARK
-sudo apt-get install sysbench -y
-sudo sysbench --test=oltp_read_write --table-size=10000 --mysql-db=sakila --mysql-user=root --mysql-password="" prepare
-sudo sysbench oltp_read_write --table-size=10000 --mysql-db=sakila --db-driver=mysql --mysql-user=root --num-threads=6 --max-time=60 --max-requests=0 run > standaloneBenchmark-_$instance_id.txt
-sudo sysbench oltp_read_write --table-size=10000 --mysql-db=sakila --db-driver=mysql --mysql-user=root cleanup
-aws s3 cp standaloneBenchmark-_$instance_id.txt s3://{s3_bucket_name}/benchmarks/standaloneBenchmark_$instance_id.txt
-
 
 # Install Python and pip
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:PYTHON
@@ -65,7 +30,7 @@ aws s3 cp s3://{s3_bucket_name}/instances_assets/db_instance/main.py ./main.py
 """
 
 import os
-def get_user_data(s3_bucket_name):
+def get_trusted_host_data(s3_bucket_name):
     return DB_USER_DATA.format(
         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),

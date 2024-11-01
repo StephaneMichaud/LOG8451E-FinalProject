@@ -4,7 +4,7 @@ import logging
 import os
 import boto3
 import requests
-
+import random
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,10 +31,17 @@ async def read_db():
     global db_workers_private_ips
     global lbmode
 
-    if lbmode == 0:
-      response = requests.get(f"http://{db_manager_private_ip}/read").json()
+    if lbmode == 0: # manager only
+        response = requests.get(f"http://{db_manager_private_ip}/read").json()
+    elif lbmode == 1: # random choice
+        choice = random.randint(0, len(db_workers_private_ips))
+        if choice > 0:
+            choice = choice -1
+            response = requests.get(f"http://{db_manager_private_ip}/read").json()
+        else:
+            response = requests.get(f"http://{db_workers_private_ips[choice]}/read").json()
     else:
-      response = {"error": "Not implemented yet!"}, 400
+        response = {"error": "Not implemented yet!"}, 400
     return response
 
 @app.post("/write")
