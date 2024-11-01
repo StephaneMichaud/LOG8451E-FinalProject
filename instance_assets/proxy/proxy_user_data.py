@@ -19,14 +19,14 @@ sudo apt-get install python3 python3-pip -y
 
 # Install Python libraries
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:PYTHON-LIBS
-aws s3 cp s3://{s3_bucket_name}/instances_assets/db_worker/requirements.txt ./requirements.txt
+aws s3 cp s3://{s3_bucket_name}/instances_assets/proxy/requirements.txt ./requirements.txt
 #sudo pip3 install fastapi uvicorn requests boto3 PyMySQL --break-system-packages
 sudo pip3 install -r requirements.txt --break-system-packages
 
 
 # Run flask
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=READY
-aws s3 cp s3://{s3_bucket_name}/instances_assets/db_instance/main.py ./main.py
+aws s3 cp s3://{s3_bucket_name}/instances_assets/proxy/main.py ./main.py
 """
 
 import os
