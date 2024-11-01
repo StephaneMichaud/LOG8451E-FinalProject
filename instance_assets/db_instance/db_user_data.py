@@ -36,13 +36,6 @@ tar -xvzf sakila-db.tar.gz
 sudo mysql -u root --password="" < sakila-db/sakila-schema.sql
 sudo mysql -u root --password="" < sakila-db/sakila-data.sql
 
-# Install Python and pip
-aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:PYTHON
-sudo apt-get update -y
-sudo apt-get install python3 python3-pip -y
-
-aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:PYTHON-FASTAPI
-sudo pip3 install fastapi uvicorn requests boto3 PyMySQL --break-system-packages
 
 
 #run mysql benchmark
@@ -53,8 +46,22 @@ sudo sysbench oltp_read_write --table-size=10000 --mysql-db=sakila --db-driver=m
 sudo sysbench oltp_read_write --table-size=10000 --mysql-db=sakila --db-driver=mysql --mysql-user=root cleanup
 aws s3 cp standaloneBenchmark-_$instance_id.txt s3://{s3_bucket_name}/benchmarks/standaloneBenchmark_$instance_id.txt
 
+
+# Install Python and pip
+aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:PYTHON
+sudo apt-get update -y
+sudo apt-get install python3 python3-pip -y
+
+# Install Python libraries
+aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:PYTHON-LIBS
+aws s3 cp s3://{s3_bucket_name}/instances_assets/db_worker/requirements.txt ./requirements.txt
+#sudo pip3 install fastapi uvicorn requests boto3 PyMySQL --break-system-packages
+sudo pip3 install -r requirements.txt --break-system-packages
+
+
 #TODO RUN FLASK
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=READY
+aws s3 cp s3://{s3_bucket_name}/instances_assets/db_instance/main.py ./main.py
 
 """
 

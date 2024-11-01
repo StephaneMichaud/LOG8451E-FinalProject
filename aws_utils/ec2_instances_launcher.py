@@ -8,7 +8,7 @@ def launch_ec2_instance(ec2,
                     image_id:str =  "ami-0e86e20dae9224db8",
                     public_ip:bool = False,
                     user_data = "",
-                    tag:tuple[str,str] = None,
+                    tags:tuple[str,str] = None,
                     ):
     # Create EC2 client
     # Specify instance parameters
@@ -21,13 +21,19 @@ def launch_ec2_instance(ec2,
         'NetworkInterfaces': [{
             'AssociatePublicIpAddress': public_ip,
             'DeviceIndex': 0,
-            'SubnetId': subnet_id,
             'Groups': [security_group_id]
         }],
     }
+    if subnet_id is not None:
+        instance_params["NetworkInterfaces"]["SubnetId"] = subnet_id
+
     if tag is not None:
+        tag_params = []
+        for tag in tags:
+            tag_params.append({"Key": tag[0], "Value": tag[1]})
+
         instance_params["TagSpecifications"] = [
-            {"ResourceType": "instance", "Tags": [{"Key": tag[0], "Value": tag[1]}]}]
+            {"ResourceType": "instance", "Tags": tag_params}]
 
     # Launch the instance
     print("Launching instances...")
