@@ -28,6 +28,12 @@ async def write_db(first_name: str, last_name: str):
         return {"message": "Proxy instance not found"}, 404
     return requests.post(f"http://{proxy_private_ip}/write", params={"first_name": first_name, "last_name": last_name}).json()
 
+@app.post("/mode")
+async def switch_lb_mode(mode: int):
+    if proxy_private_ip is None:
+        return {"message": "Proxy instance not found"}, 404
+    return requests.post(f"http://{proxy_private_ip}/mode", params={"mode": mode}).json()
+
 if __name__ == "__main__":
     # Run the FastAPI app# Create EC2 client
     ec2 = boto3.client("ec2")
