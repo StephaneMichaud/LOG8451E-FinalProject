@@ -8,11 +8,12 @@ from aws_utils.create_security_group import create_security_group
 from aws_utils.ec2_instances_launcher import launch_ec2_instance
 from aws_utils.clean_up import clean_up_ressources
 from aws_utils.create_s3_bucket import create_s3_bucket
-from aws_utils.upload_s3 import upload_folder_to_s3
+from aws_utils.upload_download_s3 import upload_folder_to_s3, download_folder_from_s3
 from aws_utils.instance_sync import wait_for_tag_value
 
 from instances_assets.db_instance.db_user_data import get_db_user_data
 from instances_assets.proxy.proxy_user_data import get_proxy_data
+from instances_assets.gatekeeper.trusted_host.trusted_host_user_data import get_trusted_host_data
 
 DEFAULT_DOTENV_PATH ='./.env'
 DEFAULT_CONFIG_PATH = "./config.yaml"
@@ -42,6 +43,8 @@ default_region = config["default_region"]
 private_instance_dbmanager = None
 private_instance_dbworkers = None
 private_instance_proxy = None
+private_instance_trusted_host = None
+public_instance_gatekeeper = None
 
 
 try:
@@ -74,9 +77,10 @@ try:
         config["key_pair_name"], 
         group_id,
         private_subnet_id,
-        config["db_instances"]["db_worker_instance_type"], 
+        instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
+        image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
         public_ip=False,
-        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"]), 
+        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_MANAGER")], 
         num_instances=1)[0]
     print("Creating DB_WORKER...")
@@ -85,11 +89,12 @@ try:
         config["key_pair_name"], 
         group_id,
         private_subnet_id,
-        config["db_instances"]["db_worker_instance_type"], 
+        instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
+        image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
         public_ip=False,
-        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"]), 
+        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_WORKER")], 
-        num_instances=1)
+        num_instances=config["instances"]["db_instances"]["n_workers"])
     
     
 
@@ -98,22 +103,70 @@ try:
         ec2, 
         config["key_pair_name"], 
         group_id,
-        public_subnet_id,
-        config["db_instances"]["db_worker_instance_type"], 
-        public_ip=True,
+        private_subnet_id,
+        instance_type=config["instances"]["proxy_instance"]["proxy_instance_type"],
+        image_id=config["instances"]["proxy_instance"]["proxy_instance_ami"],
+        public_ip=False,
         user_data = get_proxy_data(s3_bucket_name=config["s3_bucket_name"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "PROXY")], 
         num_instances=1)[0]
+    
+    print("Creating Trusted Host...")
+    private_instance_trusted_host= launch_ec2_instance(
+        ec2, 
+        config["key_pair_name"], 
+        group_id,
+        private_subnet_id,
+        instance_type=config["instances"]["gatekeeper_instances"]["trusted_host"]["gatekeeper_instance_type"],
+        instance_type=config["instances"]["gatekeeper_instances"]["trusted_host"]["ami-0022f774911c1d690"],
+        public_ip=False,
+        user_data = get_trusted_host_data(s3_bucket_name=config["s3_bucket_name"]), 
+        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "TRUSTED-HOST")], 
+        num_instances=1)[0]
 
+    print("Creating Gatekeeper...")
+    public_instance_gatekeeper= launch_ec2_instance(
+        ec2, 
+        config["key_pair_name"], 
+        group_id,
+        public_subnet_id,
+        instance_type=config["instances"]["gatekeeper_instances"]["gatekeeper"]["gatekeeper_instance_type"],
+        instance_type=config["instances"]["gatekeeper_instances"]["gatekeeper"]["ami-0022f774911c1d690"],
+        public_ip=True,
+        user_data = get_trusted_host_data(s3_bucket_name=config["s3_bucket_name"]), 
+        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "GATEKEEPER")], 
+        num_instances=1)[0]
 
     print("Waiting for DB_MANAGER to be ready...")
     wait_for_tag_value(ec2, private_instance_dbmanager[0], "STATUS", "READY")
     print("Waiting for DB_WORKERS to be ready...")
     for instance in private_instance_dbworkers:
         wait_for_tag_value(ec2, instance[0], "STATUS", "READY")
-    #TODO DOWNLOAD FROM BUCKET BENCHMARKS
+    
+    print("Downloading benchmarks from S3...")
+    download_folder_from_s3(s3_client, config["s3_bucket_name"], config["benchmarks_s3_path"], config["benchmarks_download_local_path"])
+
+
     print("Waiting for PROXY to be ready...")
     wait_for_tag_value(ec2, private_instance_proxy[0], "STATUS", "READY")
+
+    print("Waiting for Trusted-Host to be ready...")
+    wait_for_tag_value(ec2, private_instance_trusted_host[0], "STATUS", "READY")
+
+    print("Waiting for Gatekeeper to be ready...")
+    wait_for_tag_value(ec2, public_instance_gatekeeper[0], "STATUS", "READY")
+
+    print("=================================================================")
+    print("All instances are ready!")
+    print("Press any key to run benchmarks!")
+    #TODO GET CURRENT TIME (FROM CLOUDWATCH?)
+    # TODO CALL 1000 WRITE AND READ
+    #CHANGE MODE AND REPEAT 3 TIME
+
+    print("Collecting stats from cloudwatch...")
+    # TODO
+    print(f"Stats collected and saved at {"TODO"}")
+    #
 
 
 
@@ -122,6 +175,7 @@ except Exception as e:
     print(f"An error occurred: {e}")
 finally:
     #cleanup ressources
+    print("=================================================================")
     print("Cleaning up resources...")
     s3_ressource = boto3.resource('s3',
                         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
@@ -136,6 +190,10 @@ finally:
         instances_to_clean_up.extend(private_instance_dbworkers)
     if private_instance_proxy:
         instances_to_clean_up.append(private_instance_proxy)
+    if private_instance_trusted_host:
+            instances_to_clean_up.append(private_instance_trusted_host)
+    if public_instance_gatekeeper:
+            instances_to_clean_up.append(public_instance_gatekeeper)
 
     clean_up_ressources(
         ec2, 

@@ -54,7 +54,7 @@ sudo apt-get install sysbench -y
 sudo sysbench --test=oltp_read_write --table-size=10000 --mysql-db=sakila --mysql-user=root --mysql-password="" prepare
 sudo sysbench oltp_read_write --table-size=10000 --mysql-db=sakila --db-driver=mysql --mysql-user=root --num-threads=6 --max-time=60 --max-requests=0 run > standaloneBenchmark-_$instance_id.txt
 sudo sysbench oltp_read_write --table-size=10000 --mysql-db=sakila --db-driver=mysql --mysql-user=root cleanup
-aws s3 cp standaloneBenchmark-_$instance_id.txt s3://{s3_bucket_name}/benchmarks/standaloneBenchmark_$instance_id.txt
+aws s3 cp standaloneBenchmark-_$instance_id.txt s3://{s3_bucket_name}/{benchmark_upload_path}/standaloneBenchmark_$instance_id.txt
 
 #create user for fastapi app
 sudo mysql -u root --password="" <<EOF
@@ -84,12 +84,13 @@ sudo python3 main.py
 """
 
 import os
-def get_db_user_data(s3_bucket_name):
+def get_db_user_data(s3_bucket_name, benchmark_upload_path):
     return DB_USER_DATA.format(
         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
         aws_session_token = os.environ.get('AWS_SESSION_TOKEN'),
         region = os.environ.get('AWS_DEFAULT_REGION'),
         s3_bucket_name = s3_bucket_name,
+        benchmark_upload_path = benchmark_upload_path
 
     )

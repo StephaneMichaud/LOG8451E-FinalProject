@@ -3,7 +3,32 @@ security_group_name: "log8415E-tp3-security-group"
 default_region:  "us-east-1"
 s3_bucket_name: "log8451e-tp3"
 instances_assets_local_path: "instances_assets" 
+benchmarks_s3_path: "benchmarks"
+benchmarks_download_local_path: "benchmarks"
 
-db_instances:
-  db_worker_instance_type: "t2.micro"
-  db_worker_instance_ami: "ami-0022f774911c1d690"
+cloudwatch_stats:
+  cpu_stats: True
+  memory_stats: True
+  disk_stats: True
+  network_stats: True
+  stats_interval_s: 10
+  local_stats_folder: "CloudWatchStats"
+
+
+instances:
+  db_instances:
+    db_worker_instance_type: "t2.micro"
+    db_worker_instance_ami: "ami-0022f774911c1d690"
+    n_workers: 2
+
+  proxy_instance:
+    proxy_instance_type: "t2.micro"
+    proxy_instance_ami: "ami-0022f774911c1d690"
+  gatekeeper_instances:
+    gatekeeper:
+      gatekeeper_instance_type: "t2.micro"
+      gatekeeper_instance_ami: "ami-0022f774911c1d690"
+    trusted_host:
+      trusted_host_instance_type: "t2.micro"
+      trusted_host_instance_ami: "ami-0022f774911c1d690"
+

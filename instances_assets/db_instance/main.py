@@ -2,7 +2,7 @@ from fastapi import FastAPI
 import uvicorn
 import logging
 from pymysql import connect
-
+from ec2_metadata import ec2_metadata
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -12,10 +12,10 @@ app = FastAPI()
 # Database connection details
 DB_NAME = "sakila"
 connection = None
-
+instance_id = ec2_metadata.instance_id
 @app.get("/read")
 async def read_db():
-    message = f"Instance  reading now!"
+    message = f"Instance {instance_id} reading now:"
     logger.info(message)
 
     try:
@@ -27,7 +27,7 @@ async def read_db():
             
             # Format the result
             actors = [f"Actor ID: {row[0]}, Name: {row[1]} {row[2]}" for row in result]
-            message += f"\nRead {len(actors)} actors from the database:\n" + "\n".join(actors)
+            message += f" Read {len(actors)} actors from the database: " + "| ".join(actors)
     except Exception as e:
         logger.error(f"Error reading from database: {str(e)}")
         message += f"\nError occurred while reading from database: {str(e)}"
@@ -36,7 +36,7 @@ async def read_db():
 
 @app.post("/write")
 async def write_db(first_name: str, last_name: str):
-    message = f"Instance is writing now!"
+    message = f"Instance {instance_id} is writing now:"
     logger.info(message)
 
     try:
