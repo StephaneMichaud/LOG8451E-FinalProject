@@ -146,13 +146,10 @@ try:
     print("Downloading benchmarks from S3...")
     download_folder_from_s3(s3_client, config["s3_bucket_name"], config["benchmarks_s3_path"], config["benchmarks_download_local_path"])
 
-
     print("Waiting for PROXY to be ready...")
     wait_for_tag_value(ec2, private_instance_proxy[0], "STATUS", "READY")
-
     print("Waiting for Trusted-Host to be ready...")
     wait_for_tag_value(ec2, private_instance_trusted_host[0], "STATUS", "READY")
-
     print("Waiting for Gatekeeper to be ready...")
     wait_for_tag_value(ec2, public_instance_gatekeeper[0], "STATUS", "READY")
 
