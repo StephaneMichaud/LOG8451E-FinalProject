@@ -39,7 +39,7 @@ async def write_db(first_name: str, last_name: str):
    if any(pattern in first_name or pattern in last_name for pattern in sql_patterns):
       return {"message": "Invalid characters detected in name fields"}, 400
    
-      # If all validations pass, proceed with the request
+   # If all validations pass, proceed with the request
    
    return requests.post(f"http://{host_private_ip}/write", params={"first_name": first_name, "last_name": last_name}).json()
 
