@@ -27,6 +27,7 @@ sudo pip3 install -r requirements.txt --break-system-packages
 # Run flask
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=READY
 aws s3 cp s3://{s3_bucket_name}/instances_assets/gatekeeper/trusted_host/main.py ./main.py
+sudo python3 main.py
 """
 
 import os

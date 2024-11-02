@@ -10,6 +10,16 @@ aws configure set aws_secret_access_key {aws_secret_access_key}
 aws configure set aws_session_token {aws_session_token}
 aws configure set region {region}
 
+
+# Save AWS credentials in .env format
+cat << EOF > .env
+AWS_ACCESS_KEY_ID={aws_access_key_id}
+AWS_SECRET_ACCESS_KEY={aws_secret_access_key}
+AWS_SESSION_TOKEN={aws_session_token}
+AWS_DEFAULT_REGION={region}
+EOF
+
+
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:MY-SQL
 
 
@@ -46,6 +56,14 @@ sudo sysbench oltp_read_write --table-size=10000 --mysql-db=sakila --db-driver=m
 sudo sysbench oltp_read_write --table-size=10000 --mysql-db=sakila --db-driver=mysql --mysql-user=root cleanup
 aws s3 cp standaloneBenchmark-_$instance_id.txt s3://{s3_bucket_name}/benchmarks/standaloneBenchmark_$instance_id.txt
 
+#create user for fastapi app
+sudo mysql -u root --password="" <<EOF
+CREATE USER 'log8415e'@'localhost' IDENTIFIED BY 'log8415e';
+GRANT ALL ON *.* TO 'log8415e'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+
+
 
 # Install Python and pip
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:PYTHON
@@ -55,17 +73,18 @@ sudo apt-get install python3 python3-pip -y
 # Install Python libraries
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:PYTHON-LIBS
 aws s3 cp s3://{s3_bucket_name}/instances_assets/db_instance/requirements.txt ./requirements.txt
-#sudo pip3 install fastapi uvicorn requests boto3 PyMySQL --break-system-packages
+# sudo pip3 install fastapi uvicorn requests boto3 PyMySQL --break-system-packages
 sudo pip3 install -r requirements.txt --break-system-packages
 
 
-# Run flask
+#TODO RUN FLASK
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=READY
 aws s3 cp s3://{s3_bucket_name}/instances_assets/db_instance/main.py ./main.py
+sudo python3 main.py
 """
 
 import os
-def get_user_data(s3_bucket_name):
+def get_db_user_data(s3_bucket_name):
     return DB_USER_DATA.format(
         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),

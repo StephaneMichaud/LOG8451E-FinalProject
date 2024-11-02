@@ -4,7 +4,9 @@ import logging
 import os
 import boto3
 import requests
+from dotenv import load_dotenv
 import random
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,15 +33,18 @@ async def read_db():
     global db_workers_private_ips
     global lbmode
 
+    if db_manager_private_ip is None:
+        return {"error": "DB manager not found"}
+
     if lbmode == 0: # manager only
-        response = requests.get(f"http://{db_manager_private_ip}/read").json()
+      response = requests.get(f"http://{db_manager_private_ip}/read").json()
     elif lbmode == 1: # random choice
-        choice = random.randint(0, len(db_workers_private_ips))
-        if choice > 0:
+        choice = random.randint(0, len(db_workers_private_ips)) #if we select 0, it the manger, else some worker
+        if choice > 0: 
             choice = choice -1
-            response = requests.get(f"http://{db_manager_private_ip}/read").json()
-        else:
             response = requests.get(f"http://{db_workers_private_ips[choice]}/read").json()
+        else:
+            response = requests.get(f"http://{db_manager_private_ip}/read").json()
     else:
         response = {"error": "Not implemented yet!"}, 400
     return response
@@ -48,6 +53,9 @@ async def read_db():
 async def write_db(first_name: str, last_name: str):
     global db_manager_private_ip
     global db_workers_private_ips
+
+    if db_manager_private_ip is None:
+        return {"error": "DB manager not found"}, 404
    
     response = requests.post(f"http://{db_manager_private_ip}/write", params={"first_name": first_name, "last_name": last_name})
 
@@ -86,7 +94,28 @@ async def switch_lb_mode(mode: int):
 
 if __name__ == "__main__":
     # Create EC2 client
-    ec2 = boto3.client("ec2")
+
+    
+    # Load environment variables from .env file
+    load_dotenv()
+    
+    # Get AWS credentials from environment variables
+    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    aws_session_token = os.getenv('AWS_SESSION_TOKEN')
+    aws_region = os.getenv('AWS_DEFAULT_REGION')
+
+    
+    # Create EC2 client with loaded credentials
+    ec2 = boto3.client(
+        "ec2",
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        aws_session_token = aws_session_token,
+        region_name=aws_region
+    )
+    
+    ec2 = boto3.client("ec2", )
     # Get private IP of first instance with the tag ROLE = DB_MANAGER
     response = ec2.describe_instances(Filters=[
         {

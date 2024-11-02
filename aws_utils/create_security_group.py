@@ -1,7 +1,9 @@
 import boto3
 def create_security_group(ec2, vpc_id, group_name, group_description):
-    ec2 = boto3.client('ec2')
     
+    if vpc_id is None:
+        vpc_id = ec2.describe_vpcs()['Vpcs'][0]['VpcId']
+        
     security_group = ec2.create_security_group(
         GroupName=group_name,
         Description=group_description,

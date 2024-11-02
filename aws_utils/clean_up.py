@@ -98,12 +98,17 @@ def delete_s3_bucket(s3_client, bucket_name):
 
 
 def clean_up_ressources(ec2, instance_ids, key_name, local_key_path, group_id, vpc_id, s3, bucket_name):
-    if len(instance_ids) > 0: terminate_instances(ec2, [i[0] for i in instance_ids])
-    time.sleep(INSTANCE_DELETE_DELAY)  # We wait to ensure instances are deleted
-    delete_key_pair(ec2, key_name, local_key_path)
-    time.sleep(60)  # Wait to ensure key pairs are deleted
-    if group_id is not None: delete_security_group(ec2, group_id)  # Ensure instances are deleted before security group
-    time.sleep(60)  # Wait to ensure security group are deleted
-    if vpc_id is not None: cleanup_vpc_and_nat(ec2, vpc_id)
+    if ec2 is not None:
+        if len(instance_ids) > 0: 
+            terminate_instances(ec2, [i[0] for i in instance_ids])
+            time.sleep(INSTANCE_DELETE_DELAY)  # We wait to ensure instances are deleted
+        delete_key_pair(ec2, key_name, local_key_path)
+        time.sleep(60)  # Wait to ensure key pairs are deleted
+        if group_id is not None: 
+            delete_security_group(ec2, group_id)  # Ensure instances are deleted before security group
+            time.sleep(60)  # Wait to ensure security group are deleted
+        if vpc_id is not None: 
+            cleanup_vpc_and_nat(ec2, vpc_id)
+    if s3 is not None:
+        delete_s3_bucket(s3, bucket_name=bucket_name)
     print("Cleanup completed.")
-    #delete_s3_bucket(s3, bucket_name=bucket_name)

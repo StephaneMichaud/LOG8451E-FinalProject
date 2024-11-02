@@ -1,0 +1,6 @@
+fastapi 
+uvicorn 
+requests 
+boto3
+ec2-metadata
+python-dotenv

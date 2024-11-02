@@ -1,9 +1,7 @@
 from fastapi import FastAPI
 import uvicorn
 import logging
-import os
-from ec2_metadata import ec2_metadata
-from PyMySQL import connect
+from pymysql import connect
 
 
 # Configure logging
@@ -60,9 +58,8 @@ if __name__ == "__main__":
 # Connect to the database
     try:
         connection = connect(
-            host='localhost',
-            user='root',
-            password='',
+            user='log8415e',
+            password='log8415e',
             database=DB_NAME
         )
         logger.info(f"Successfully connected to {DB_NAME} database")
