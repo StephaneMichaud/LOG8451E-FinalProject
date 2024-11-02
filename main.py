@@ -8,6 +8,7 @@ from aws_utils.create_security_group import create_security_group
 from aws_utils.ec2_instances_launcher import launch_ec2_instance
 from aws_utils.clean_up import clean_up_ressources
 from aws_utils.create_s3_bucket import create_s3_bucket
+from aws_utils.upload_to_s3 import upload_to_s3
 
 from instance_assets.db_instance.db_user_data import get_user_data
 
@@ -41,6 +42,7 @@ try:
                              region_name = os.environ.get('AWS_DEFAULT_REGION'),
                              )
     create_s3_bucket(s3_client, config["s3_bucket_name"])
+    upload_to_s3(s3_client, config["s3_bucket_name"], config["instances_assets_local_path"])
 
 
 
