@@ -12,25 +12,34 @@ def get_public_ip(ec2, instance_id):
         raise ValueError(f"No public IP address found for instance {instance_id}")
 
 # Function to send requests to a specific endpoint
-async def call_endpoint_http(session, request_num, url):
+async def call_get_http(session, public_ip_adress, call_path):
     headers = {'content-type': 'application/json'}
     try:
-        async with session.get(url, headers=headers) as response:
+        async with session.get(public_ip_adress + "/" + call_path, headers=headers) as response:
             status_code = response.status
             response_json = await response.json()
-            print(f"Request {request_num}: Status Code: {status_code}")
-            print(f"Response Json {response_json}")
             return status_code, response_json
     except Exception as e:
-        print(f"Request {request_num}: Failed - {str(e)}")
+        return None, str(e)
+    
+
+# Function to send requests to a specific endpoint
+async def call_post_http(session, public_ip_adress, call_path, args:dict):
+    headers = {'content-type': 'application/json'}
+    try:
+        async with session.post(public_ip_adress + "/" + call_path, json=args, headers=headers) as response:
+            status_code = response.status
+            response_json = await response.json()
+            return status_code, response_json
+    except Exception as e:
         return None, str(e)
 
 # Function to benchmark the cluster
-async def benchmark_cluster(cluster_url, num_requests=1000):
+async def benchmark_read_cluster(gate_keeper_url, num_requests=1000):
     start_time = time.time()
     
     async with aiohttp.ClientSession() as session:
-        tasks = [call_endpoint_http(session, i, cluster_url) for i in range(num_requests)]
+        tasks = [call_get_http(session, gate_keeper_url, "read") for _ in range(num_requests)]
         await asyncio.gather(*tasks)
     
     end_time = time.time()
@@ -38,13 +47,15 @@ async def benchmark_cluster(cluster_url, num_requests=1000):
     print(f"\nTotal time taken: {total_time:.2f} seconds")
     print(f"Average time per request: {total_time / num_requests:.4f} seconds")
 
-# Main benchmark function
-async def run_benchmark(lb_public_ip):
-    cluster1_url = f"http://{lb_public_ip}:80/cluster1"
-    cluster2_url = f"http://{lb_public_ip}:80/cluster2"
+# Function to benchmark the cluster
+async def benchmark_write_cluster(gate_keeper_url, num_requests=1000):
+    start_time = time.time()
     
-    print("\nBenchmarking Cluster 1")
-    await benchmark_cluster(cluster1_url)
+    async with aiohttp.ClientSession() as session:
+        tasks = [call_get_http(session, gate_keeper_url, "read") for _ in range(num_requests)]
+        await asyncio.gather(*tasks)
     
-    print("\nBenchmarking Cluster 2")
-    await benchmark_cluster(cluster2_url)
+    end_time = time.time()
+    total_time = end_time - start_time
+    print(f"\nTotal time taken: {total_time:.2f} seconds")
+    print(f"Average time per request: {total_time / num_requests:.4f} seconds")
