@@ -14,6 +14,11 @@ from aws_utils.instance_sync import wait_for_tag_value
 from instances_assets.db_instance.db_user_data import get_db_user_data
 from instances_assets.proxy.proxy_user_data import get_proxy_data
 from instances_assets.gatekeeper.trusted_host.trusted_host_user_data import get_trusted_host_data
+from benchmarks_utils.benchmarking import benchmarks_cluster
+from aws_utils.cloudwatch_metrics import get_instance_metrics, plot_metrics
+import datetime
+
+import os
 
 DEFAULT_DOTENV_PATH ='./.env'
 DEFAULT_CONFIG_PATH = "./config.yaml"
@@ -117,8 +122,8 @@ try:
         config["key_pair_name"], 
         group_id,
         private_subnet_id,
-        instance_type=config["instances"]["gatekeeper_instances"]["trusted_host"]["gatekeeper_instance_type"],
-        instance_type=config["instances"]["gatekeeper_instances"]["trusted_host"]["ami-0022f774911c1d690"],
+        instance_type=config["instances"]["gatekeeper_instances"]["trusted_host"]["trusted_host_instance_type"],
+        image_id=config["instances"]["gatekeeper_instances"]["trusted_host"]["trusted_host_instance_ami"],
         public_ip=False,
         user_data = get_trusted_host_data(s3_bucket_name=config["s3_bucket_name"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "TRUSTED-HOST")], 
@@ -131,7 +136,7 @@ try:
         group_id,
         public_subnet_id,
         instance_type=config["instances"]["gatekeeper_instances"]["gatekeeper"]["gatekeeper_instance_type"],
-        instance_type=config["instances"]["gatekeeper_instances"]["gatekeeper"]["ami-0022f774911c1d690"],
+        image_id=config["instances"]["gatekeeper_instances"]["gatekeeper"]["gatekeeper_instance_ami"],
         public_ip=True,
         user_data = get_trusted_host_data(s3_bucket_name=config["s3_bucket_name"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "GATEKEEPER")], 
@@ -156,14 +161,40 @@ try:
     print("=================================================================")
     print("All instances are ready!")
     print("Press any key to run benchmarks!")
-    #TODO GET CURRENT TIME (FROM CLOUDWATCH?)
-    # TODO CALL 1000 WRITE AND READ
-    #CHANGE MODE AND REPEAT 3 TIME
 
+    gatekeeper_instance = ec2.describe_instances(InstanceIds=[public_instance_gatekeeper[0]])['Reservations'][0]['Instances'][0]
+    gatekeeper_public_ip = gatekeeper_instance['PublicIpAddress']
+    print(f"Gatekeeper public IP: {gatekeeper_public_ip}")
+
+    benchmarks_cluster(gatekeeper_public_ip, config["cluster_benchmark"]["wait_time_s"])
+    db_instances_dict = {
+        "db_manager": private_instance_dbmanager[0],
+    }
+    worker_id = 1
+    for worker in private_instance_dbworkers:
+        db_instances_dict[f"db_worker_{worker_id}"] = worker[0]
+        worker_id += 1
+    
+    cloudwatch = boto3.client('cloudwatch',
+                            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                            aws_session_token=os.environ.get('AWS_SESSION_TOKEN'),
+                            region_name=default_region)
+    
+    current_time = datetime.datetime.now(datetime.timezone.utc)
+    formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+    print(f"Current UTC time and date: {formatted_time}")
+    
     print("Collecting stats from cloudwatch...")
-    # TODO
-    print(f"Stats collected and saved at {"TODO"}")
-    #
+    metrics = get_instance_metrics(
+         db_instances_dict, 
+         cloudwatch, 
+         current_time - datetime.timedelta( seconds = config["cluster_benchmark"]["wait_time_s"] * 10), 
+         current_time, 
+         config["cluster_benchmark"]["period_s"], 
+         True, True, True, True, False)
+    plot_metrics(metrics, out_folder = config["benchmarks_download_local_path"])
+    print(f"Stats collected and saved at {config["benchmarks_download_local_path"]}")
 
 
 

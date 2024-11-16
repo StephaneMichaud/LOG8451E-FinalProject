@@ -128,7 +128,8 @@ if __name__ == "__main__":
         }
     ])
     
-    db_manager_private_ip = response['Reservations'][0]['Instances'][0]['PrivateIpAddress']
+    if response['Reservations']:
+        db_manager_private_ip = response['Reservations'][0]['Instances'][0]['PrivateIpAddress']
 
     # Get private IPs of all instances with the tag ROLE = DB_WORKER
     response = ec2.describe_instances(Filters=[
@@ -141,8 +142,8 @@ if __name__ == "__main__":
             'Values': ['running']
         }
     ])
-
-    db_workers_private_ips = [res["PrivateIpAddress"] for res in response["Reservations"][0]["Instances"]]
+    if response['Reservations']:
+        db_workers_private_ips = [res["PrivateIpAddress"] for res in response["Reservations"][0]["Instances"]]
     
     # Run the FastAPI app
     uvicorn.run(app, host="0.0.0.0", port=80)

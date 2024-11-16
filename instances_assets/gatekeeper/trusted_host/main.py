@@ -48,7 +48,7 @@ if __name__ == "__main__":
                 'Values': ['running']
             }
         ])
-        
-    proxy_private_ip = response['Reservations'][0]['Instances'][0]['PrivateIpAddress']
+    if response['Reservations']:
+        proxy_private_ip = response['Reservations'][0]['Instances'][0]['PrivateIpAddress']
 
     uvicorn.run(app, host="0.0.0.0", port=80)

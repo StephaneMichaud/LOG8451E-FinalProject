@@ -41,23 +41,11 @@ async def call_write_actor(session, public_ip_adress, call_path):
         "first_name": first_name,
         "last_name": last_name
     }
-    await call_get_http(session, public_ip_adress, call_path, args)
+    await call_post_http(session, public_ip_adress, call_path, args)
 
 # Function to benchmark the cluster
 async def benchmark_read_cluster(gate_keeper_url, num_requests=1000):
-    start_time = time.time()
-    
-    async with aiohttp.ClientSession() as session:
-        tasks = [call_write_actor(session, gate_keeper_url, "read") for _ in range(num_requests)]
-        await asyncio.gather(*tasks)
-    
-    end_time = time.time()
-    total_time = end_time - start_time
-    print(f"\nTotal time taken: {total_time:.2f} seconds")
-    print(f"Average time per request: {total_time / num_requests:.4f} seconds")
-
-# Function to benchmark the cluster
-async def benchmark_write_cluster(gate_keeper_url, num_requests=1000):
+    print("Benchmarking read cluster...")
     start_time = time.time()
     
     async with aiohttp.ClientSession() as session:
@@ -68,3 +56,40 @@ async def benchmark_write_cluster(gate_keeper_url, num_requests=1000):
     total_time = end_time - start_time
     print(f"\nTotal time taken: {total_time:.2f} seconds")
     print(f"Average time per request: {total_time / num_requests:.4f} seconds")
+
+# Function to benchmark the cluster
+async def benchmark_write_cluster(gate_keeper_url, num_requests=1000):
+    print("Benchmarking write cluster...")
+    start_time = time.time()
+    
+    async with aiohttp.ClientSession() as session:
+        tasks = [call_write_actor(session, gate_keeper_url, "write") for _ in range(num_requests)]
+        await asyncio.gather(*tasks)
+    
+    end_time = time.time()
+    total_time = end_time - start_time
+    print(f"\nTotal time taken: {total_time:.4f} seconds")
+    print(f"Average time per request: {total_time / num_requests:.4f} seconds")
+
+async def switch_proxy_mode(gate_keeper_url, mode = 0):
+    args = {
+        "mode": mode
+    }
+    async with aiohttp.ClientSession() as session:
+        await call_post_http(session, gate_keeper_url, "mode", args)
+        print(f"Switched to mode {mode}")
+
+async def benchmarks_cluster(gate_keeper_url, num_requests=1000, wait_time_between_mode_s = 50):
+    try:
+        await benchmark_write_cluster(gate_keeper_url, num_requests)
+        time.sleep(wait_time_between_mode_s)
+        await benchmark_read_cluster(gate_keeper_url, num_requests)
+        time.sleep(wait_time_between_mode_s)
+        await switch_proxy_mode(gate_keeper_url, 1)
+        await benchmark_read_cluster(gate_keeper_url, num_requests)
+        time.sleep(wait_time_between_mode_s)
+    except Exception as e:
+        print(f"Error : {e}")
+    # switch_proxy_mode(gate_keeper_url, 2)
+    # asyncio.run(benchmark_read_cluster(gate_keeper_url, num_requests))
+

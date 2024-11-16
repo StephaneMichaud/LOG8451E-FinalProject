@@ -10,6 +10,7 @@ def launch_ec2_instance(ec2,
                     public_ip:bool = False,
                     user_data = "",
                     tags:list[tuple[str,str]] = None,
+                    enable_detailed_monitoring:bool = False,
                     ):
     # Create EC2 client
     # Specify instance parameters
@@ -24,6 +25,7 @@ def launch_ec2_instance(ec2,
             'DeviceIndex': 0,
             'Groups': [security_group_id]
         }],
+        'Monitoring': {'Enabled': enable_detailed_monitoring},
     }
     if subnet_id is not None:
         instance_params["NetworkInterfaces"][0]["SubnetId"] = subnet_id
