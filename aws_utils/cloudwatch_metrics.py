@@ -77,7 +77,9 @@ def plot_metrics(metrics, out_dir):
             if metric_type in instance_metrics:
                 metric_data = instance_metrics[metric_type]
                 if metric_data:
-                    timestamps = [point['Timestamp'] for point in metric_data]
+
+                    metric_data.sort(key=lambda point: point['Timestamp'])
+                    timestamps = list(range(len(metric_data)))
                     values = [point['Average'] for point in metric_data]
                     plt.plot(timestamps, values, label=instance_name)
         

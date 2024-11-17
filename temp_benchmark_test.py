@@ -46,10 +46,8 @@ s3_client = None
 default_region = config["default_region"]
 
 private_instance_dbmanager = None
-private_instance_dbworkers = None
+#private_instance_dbworkers = None
 private_instance_proxy = None
-private_instance_trusted_host = None
-public_instance_gatekeeper = None
 
 
 try:
@@ -71,58 +69,58 @@ try:
         aws_session_token = os.environ.get('AWS_SESSION_TOKEN'),
         region_name = default_region,
     )
-    print("Creating Gatekeeper...")
+    print("Creating Db manager...")
     key_pair_path = generate_key_pair(ec2, config["key_pair_name"])
     vpc_id, public_subnet_id, private_subnet_id = None, None, None#create_vpc_and_nat(ec2)
     group_id = create_security_group(ec2, vpc_id, config["security_group_name"], "solo security group")
-    public_instance_gatekeeper= launch_ec2_instance(
+    private_instance_dbmanager = launch_ec2_instance(
         ec2, 
         config["key_pair_name"], 
         group_id,
         None,
-        instance_type=config["instances"]["gatekeeper_instances"]["gatekeeper"]["gatekeeper_instance_type"],
-        image_id=config["instances"]["gatekeeper_instances"]["gatekeeper"]["gatekeeper_instance_ami"],
+        instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
+        image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
         public_ip=True,
-        user_data = get_trusted_host_data(s3_bucket_name=config["s3_bucket_name"]), 
-        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "GATEKEEPER")], 
+        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
+        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_MANAGER")], 
         num_instances=1,
         enable_detailed_monitoring = True)[0]
-    public_instance_cluster0 = [public_instance_gatekeeper]
-    print(f"Waiting for Gatekeeper {public_instance_gatekeeper[0]} to be ready...")
-    wait_for_tag_value(ec2, public_instance_gatekeeper[0], "STATUS", "READY")
-    gatekeeper_instance = ec2.describe_instances(InstanceIds=[public_instance_gatekeeper[0]])['Reservations'][0]['Instances'][0]
-    gatekeeper_public_ip = gatekeeper_instance['PublicIpAddress']
-    print(f"Gatekeeper public IP: {gatekeeper_public_ip}")
-    time_before_benchmarks = datetime.datetime.now(datetime.timezone.utc)
-    asyncio.run(benchmarks_cluster(gatekeeper_public_ip, config["cluster_benchmark"]["wait_time_s"]))
-    gatekeepers = {
-        "gatekeeper": public_instance_gatekeeper[0],
-        "gatekeeper2": public_instance_gatekeeper[0],
-
-    }
-
-    print(f"Waiting a {config['cluster_benchmark']['cloudwatch_aquisition_wait_time_s']} sec for cloudwatch to collect stats...")
-    time.sleep(config['cluster_benchmark']['cloudwatch_aquisition_wait_time_s'])
-    cloudwatch = boto3.client('cloudwatch',
-                            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-                            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                            aws_session_token=os.environ.get('AWS_SESSION_TOKEN'),
-                            region_name=default_region)
+    
+    print("Creating DB_WORKER...")
+    private_instance_dbworkers = launch_ec2_instance(
+        ec2, 
+        config["key_pair_name"], 
+        group_id,
+        None,
+        instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
+        image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
+        public_ip=True,
+        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
+        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_WORKER")], 
+        num_instances=config["instances"]["db_instances"]["n_workers"],
+        enable_detailed_monitoring = True)
+    
     
 
-    current_time = datetime.datetime.now(datetime.timezone.utc)
-    formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S UTC")
-    print(f"Collecting stats from cloudwatch from {time_before_benchmarks} to {current_time}...")
-    metrics = get_instance_metrics(
-         gatekeepers, 
-         cloudwatch, 
-         time_before_benchmarks - datetime.timedelta(seconds=120), 
-         current_time, 
-         config["cluster_benchmark"]["period_s"], 
-         True, True, True)
-    print(metrics)
-    plot_metrics(metrics, out_dir = config["benchmarks_download_local_path"])
-    print(f"Stats collected and saved at {config['benchmarks_download_local_path']}")
+    print("Creating PROXY...")
+    private_instance_proxy= launch_ec2_instance(
+        ec2, 
+        config["key_pair_name"], 
+        group_id,
+        None,
+        instance_type=config["instances"]["proxy_instance"]["proxy_instance_type"],
+        image_id=config["instances"]["proxy_instance"]["proxy_instance_ami"],
+        public_ip=True,
+        user_data = get_proxy_data(s3_bucket_name=config["s3_bucket_name"]), 
+        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "PROXY")], 
+        num_instances=1)[0]
+    
+    public_instance_cluster0 = [private_instance_proxy, private_instance_dbmanager] + private_instance_dbworkers
+    wait_for_tag_value(ec2, private_instance_proxy[0], "STATUS", "READY")
+    wait_for_tag_value(ec2, private_instance_dbmanager[0], "STATUS", "READY")
+    for instance in private_instance_dbworkers:
+        wait_for_tag_value(ec2, instance[0], "STATUS", "READY")
+    input("Press Enter to continue...")
 except Exception as e:
     print(f"Error : {e}")
 finally:

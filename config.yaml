@@ -10,15 +10,7 @@ benchmarks_download_local_path: "benchmarks"
 cluster_benchmark:
   wait_time_s: 120
   period_s: 60
-  cloudwatch_aquisition_wait_time_s : 180
-
-cloudwatch_stats:
-  cpu_stats: True
-  memory_stats: True
-  disk_stats: True
-  network_stats: True
-  stats_interval_s: 10
-  local_stats_folder: "CloudWatchStats"
+  cloudwatch_aquisition_wait_time_s : 120
 
 #the current user data assume an ubuntu AMI for all instances. If not, the instance will stay in the state BOOTING-UP. Make sure the AMI is still valid.
 #If not, it will default to amazon-linux and the userdata script wont work.

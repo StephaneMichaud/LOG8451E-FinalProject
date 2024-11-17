@@ -21,6 +21,7 @@ async def call_get_http(session, public_ip_adress, call_path):
             response_json = await response.json()
             return status_code, response_json
     except Exception as e:
+        print("error:", e)
         return None, str(e)
     
 
@@ -28,11 +29,12 @@ async def call_get_http(session, public_ip_adress, call_path):
 async def call_post_http(session, public_ip_adress, call_path, args:dict):
     headers = {'content-type': 'application/json'}
     try:
-        async with session.post(public_ip_adress + "/" + call_path, json=args, headers=headers) as response:
+        async with session.post(public_ip_adress + "/" + call_path, params=args, headers=headers) as response:
             status_code = response.status
             response_json = await response.json()
             return status_code, response_json
     except Exception as e:
+        print("error:", e)
         return None, str(e)
     
 async def call_write_actor(session, public_ip_adress, call_path):
@@ -79,17 +81,30 @@ async def switch_proxy_mode(gate_keeper_url, mode = 0):
         await call_post_http(session, gate_keeper_url, "mode", args)
         print(f"Switched to mode {mode}")
 
-async def benchmarks_cluster(gate_keeper_url, num_requests=1000, wait_time_between_mode_s = 50):
+async def benchmarks_cluster(gate_keeper_ip, num_requests=1000, wait_time_between_mode_s = 60):
+    gate_keeper_url = f"http://{gate_keeper_ip}:80"
     try:
+        print("Waiting initially to not have any metrics from the installation")
+        print("****************************************")
+        time.sleep(2*wait_time_between_mode_s)
         await benchmark_write_cluster(gate_keeper_url, num_requests)
+        print("Waiting after write requests...")
+        print("****************************************")
         time.sleep(wait_time_between_mode_s)
         await benchmark_read_cluster(gate_keeper_url, num_requests)
+        print("Waiting after read requests mode 0...")
+        print("****************************************")
         time.sleep(wait_time_between_mode_s)
         await switch_proxy_mode(gate_keeper_url, 1)
         await benchmark_read_cluster(gate_keeper_url, num_requests)
+        print("Waiting after read requests mode 1...")
+        print("****************************************")
         time.sleep(wait_time_between_mode_s)
+        await switch_proxy_mode(gate_keeper_url, 2)
+        await benchmark_read_cluster(gate_keeper_url, num_requests)
+        print("Waiting after read requests mode 2...")
+        time.sleep(wait_time_between_mode_s)
+        print("****************************************")
     except Exception as e:
         print(f"Error : {e}")
-    # switch_proxy_mode(gate_keeper_url, 2)
-    # asyncio.run(benchmark_read_cluster(gate_keeper_url, num_requests))
 

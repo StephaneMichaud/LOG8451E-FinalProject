@@ -45,9 +45,45 @@ async def read_db():
             response = requests.get(f"http://{db_workers_private_ips[choice]}/read").json()
         else:
             response = requests.get(f"http://{db_manager_private_ip}/read").json()
+    elif lbmode == 2: # least busy
+        least_busy_ip = get_least_busy_ip()
+        if least_busy_ip:
+            response = requests.get(f"http://{least_busy_ip}/read").json()
+        else:
+            return {"error": "Cannot ping any db"}
     else:
-        response = {"error": "Not implemented yet!"}, 400
+        return {"error": "Invalid load balancing mode"}
     return response
+
+
+
+def get_least_busy_ip():
+    global db_manager_private_ip
+    global db_workers_private_ips
+    
+    all_ips = [db_manager_private_ip] + db_workers_private_ips
+    response_times = []
+    valid_ip = []
+    
+    for ip in all_ips:
+        try:
+            response = requests.get(f"http://{ip}/ping")
+            
+            if response.ok:
+                response_times.append(response.elapsed.total_seconds())
+                valid_ip.append(ip)
+            else:
+                logger.warning(f"Failed to ping {ip}: {response.status_code}")
+        except requests.RequestException as e:
+            logger.error(f"Error pinging {ip}: {str(e)}")
+    
+    if response_times:
+        least_busy_ip_index = response_times.index(min(response_times))
+        return valid_ip[least_busy_ip_index]
+    else:
+        logger.error("No responsive IPs found")
+        return None
+
 
 @app.post("/write")
 async def write_db(first_name: str, last_name: str):

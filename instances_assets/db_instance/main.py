@@ -13,6 +13,12 @@ app = FastAPI()
 DB_NAME = "sakila"
 connection = None
 instance_id = ec2_metadata.instance_id
+
+
+@app.get("/ping")
+async def ping():
+    return {"message": f"!"}
+
 @app.get("/read")
 async def read_db():
     message = f"Instance {instance_id} reading now:"

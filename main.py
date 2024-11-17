@@ -1,6 +1,9 @@
 import os
 import boto3
 import yaml
+import asyncio
+import datetime
+import time
 from aws_utils.credentials_loading import load_credentials
 from aws_utils.generate_key_pair import generate_key_pair
 from aws_utils.create_nat_gateway import create_vpc_and_nat
@@ -10,15 +13,13 @@ from aws_utils.clean_up import clean_up_ressources
 from aws_utils.create_s3_bucket import create_s3_bucket
 from aws_utils.upload_download_s3 import upload_folder_to_s3, download_folder_from_s3
 from aws_utils.instance_sync import wait_for_tag_value
+from aws_utils.cloudwatch_metrics import get_instance_metrics, plot_metrics
 
 from instances_assets.db_instance.db_user_data import get_db_user_data
 from instances_assets.proxy.proxy_user_data import get_proxy_data
 from instances_assets.gatekeeper.trusted_host.trusted_host_user_data import get_trusted_host_data
-from benchmarks_utils.benchmarking import benchmarks_cluster
-from aws_utils.cloudwatch_metrics import get_instance_metrics, plot_metrics
-import datetime
 
-import os
+from benchmarks_utils.benchmarking import benchmarks_cluster
 
 DEFAULT_DOTENV_PATH ='./.env'
 DEFAULT_CONFIG_PATH = "./config.yaml"
@@ -87,7 +88,8 @@ try:
         public_ip=False,
         user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_MANAGER")], 
-        num_instances=1)[0]
+        num_instances=1,
+        enable_detailed_monitoring = True)[0]
     print("Creating DB_WORKER...")
     private_instance_dbworkers = launch_ec2_instance(
         ec2, 
@@ -99,7 +101,8 @@ try:
         public_ip=False,
         user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_WORKER")], 
-        num_instances=config["instances"]["db_instances"]["n_workers"])
+        num_instances=config["instances"]["db_instances"]["n_workers"],
+        enable_detailed_monitoring = True)
     
     
 
@@ -160,15 +163,16 @@ try:
 
     print("=================================================================")
     print("All instances are ready!")
-    print("Press any key to run benchmarks!")
 
     gatekeeper_instance = ec2.describe_instances(InstanceIds=[public_instance_gatekeeper[0]])['Reservations'][0]['Instances'][0]
-    gatekeeper_public_ip = gatekeeper_instance['PublicIpAddress']
+    gatekeeper_public_ip = gatekeeper_instance.get('PublicIpAddress')
     print(f"Gatekeeper public IP: {gatekeeper_public_ip}")
-
-    benchmarks_cluster(gatekeeper_public_ip, config["cluster_benchmark"]["wait_time_s"])
+    time_before_benchmarks = datetime.datetime.now(datetime.timezone.utc)
+    asyncio.run(benchmarks_cluster(
+        gatekeeper_public_ip, 
+        wait_time_between_mode_s=config["cluster_benchmark"]["wait_time_s"]))
     db_instances_dict = {
-        "db_manager": private_instance_dbmanager[0],
+        "db_manager": private_instance_dbmanager[0]
     }
     worker_id = 1
     for worker in private_instance_dbworkers:
@@ -183,22 +187,20 @@ try:
     
     current_time = datetime.datetime.now(datetime.timezone.utc)
     formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S UTC")
-    print(f"Current UTC time and date: {formatted_time}")
-    
+    print("Waiting for cloud watch to get some stats")
+    time.sleep(config["cluster_benchmark"]["wait_time_s"])
+    print(f"Collecting stats from cloudwatch from {time_before_benchmarks} to {current_time}...")
     print("Collecting stats from cloudwatch...")
     metrics = get_instance_metrics(
          db_instances_dict, 
          cloudwatch, 
-         current_time - datetime.timedelta( seconds = config["cluster_benchmark"]["wait_time_s"] * 10), 
+         time_before_benchmarks, 
          current_time, 
          config["cluster_benchmark"]["period_s"], 
-         True, True, True, True, False)
-    plot_metrics(metrics, out_folder = config["benchmarks_download_local_path"])
-    print(f"Stats collected and saved at {config["benchmarks_download_local_path"]}")
+         True, False, False)
+    plot_metrics(metrics, out_dir = config["benchmarks_download_local_path"])
+    print(f"Stats collected and saved at {config['benchmarks_download_local_path']}")
 
-
-
-    input("Press any key to cleanup...")
 except Exception as e:
     print(f"An error occurred: {e}")
 finally:
