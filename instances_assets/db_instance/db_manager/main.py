@@ -2,7 +2,11 @@ from fastapi import FastAPI
 import uvicorn
 import logging
 from pymysql import connect
+import boto3
+import os
+from dotenv import load_dotenv
 from ec2_metadata import ec2_metadata
+import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -13,7 +17,7 @@ app = FastAPI()
 DB_NAME = "sakila"
 connection = None
 instance_id = ec2_metadata.instance_id
-
+db_workers_private_ips = []
 
 @app.get("/ping")
 async def ping():
@@ -42,6 +46,7 @@ async def read_db():
 
 @app.post("/write")
 async def write_db(first_name: str, last_name: str):
+    global db_workers_private_ips
     message = f"Instance {instance_id} is writing now:"
     logger.info(message)
 
@@ -52,6 +57,21 @@ async def write_db(first_name: str, last_name: str):
         connection.commit()
         message += f"\nSuccessfully added new actor: {first_name} {last_name}"
         logger.info(f"New actor added: {first_name} {last_name}")
+        worker_errors= []
+
+        #replicate write on workers
+        for worker_ip in db_workers_private_ips:
+            try:
+                worker_response = requests.post(f"http://{worker_ip}/write", params={"first_name": first_name, "last_name": last_name})
+                if not worker_response.ok:
+                    worker_errors.append(f"Worker {worker_ip} failed to update: {worker_response.text}")
+            except requests.RequestException as e:
+                worker_errors.append(f"Failed to send write request to worker {worker_ip}: {str(e)}")
+                logger.error(f"Failed to send write request to worker {worker_ip}: {str(e)}")
+        
+        if worker_errors:
+            return {"error": "Some workers failed to update", "details": worker_errors}, 500
+    
     except Exception as e:
         logger.error(f"Error writing to database: {str(e)}")
         message += f"\nError occurred while writing to database: {str(e)}"
@@ -60,8 +80,41 @@ async def write_db(first_name: str, last_name: str):
 
 if __name__ == "__main__":
     # Run the FastAPI app
+     # Create EC2 client
 
-# Connect to the database
+    
+    # Load environment variables from .env file
+    load_dotenv()
+    
+    # Get AWS credentials from environment variables
+    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    aws_session_token = os.getenv('AWS_SESSION_TOKEN')
+    aws_region = os.getenv('AWS_DEFAULT_REGION')
+
+    
+    # Create EC2 client with loaded credentials
+    ec2 = boto3.client(
+        "ec2",
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        aws_session_token = aws_session_token,
+        region_name=aws_region
+    )
+    # Connect to the database
+     # Get private IPs of all instances with the tag ROLE = DB_WORKER
+    response = ec2.describe_instances(Filters=[
+        {
+            'Name': 'tag:ROLE',
+            'Values': ['DB_WORKER']
+        },
+        {
+            'Name': 'instance-state-name',
+            'Values': ['running']
+        }
+    ])
+    if response['Reservations']:
+        db_workers_private_ips = [res["PrivateIpAddress"] for res in response["Reservations"][0]["Instances"]]
     try:
         connection = connect(
             user='log8415e',

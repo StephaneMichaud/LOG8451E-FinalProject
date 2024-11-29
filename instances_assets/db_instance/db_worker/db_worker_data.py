@@ -72,18 +72,18 @@ sudo apt-get install python3 python3-pip -y
 
 # Install Python libraries
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=INSTALL:PYTHON-LIBS
-aws s3 cp s3://{s3_bucket_name}/instances_assets/db_instance/requirements.txt ./requirements.txt
+aws s3 cp s3://{s3_bucket_name}/instances_assets/db_instance/db_worker/requirements.txt ./requirements.txt
 sudo pip3 install -r requirements.txt
 
 
-#TODO RUN FLASK
+# Run flask application
 aws ec2 create-tags --region {region} --resources $instance_id --tags Key=STATUS,Value=READY
-aws s3 cp s3://{s3_bucket_name}/instances_assets/db_instance/main.py ./main.py
+aws s3 cp s3://{s3_bucket_name}/instances_assets/db_instance/db_worker/main.py ./main.py
 sudo python3 main.py
 """
 
 import os
-def get_db_user_data(s3_bucket_name, benchmark_upload_path):
+def get_db_worker_data(s3_bucket_name, benchmark_upload_path):
     return DB_USER_DATA.format(
         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),

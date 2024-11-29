@@ -15,7 +15,8 @@ from aws_utils.upload_download_s3 import upload_folder_to_s3, download_folder_fr
 from aws_utils.instance_sync import wait_for_tag_value
 from aws_utils.cloudwatch_metrics import get_instance_metrics, plot_metrics
 
-from instances_assets.db_instance.db_user_data import get_db_user_data
+from instances_assets.db_instance.db_worker.db_worker_data import get_db_worker_data
+from instances_assets.db_instance.db_manager.db_manager_data import get_db_manager_data
 from instances_assets.proxy.proxy_user_data import get_proxy_data
 from instances_assets.gatekeeper.trusted_host.trusted_host_user_data import get_trusted_host_data
 
@@ -77,6 +78,19 @@ try:
     vpc_id, public_subnet_id, private_subnet_id = create_vpc_and_nat(ec2)
     group_id = create_security_group(ec2, vpc_id, config["security_group_name"], "solo security group")
 
+    print("Creating DB_WORKERS...")
+    private_instance_dbworkers = launch_ec2_instance(
+        ec2, 
+        config["key_pair_name"], 
+        group_id,
+        private_subnet_id,
+        instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
+        image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
+        public_ip=False,
+        user_data = get_db_worker_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
+        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_WORKER")], 
+        num_instances=config["instances"]["db_instances"]["n_workers"],
+        enable_detailed_monitoring = True)
     print("Creating DB_MANAGER...")
     private_instance_dbmanager = launch_ec2_instance(
         ec2, 
@@ -86,23 +100,10 @@ try:
         instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
         image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
         public_ip=False,
-        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
+        user_data = get_db_manager_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_MANAGER")], 
         num_instances=1,
         enable_detailed_monitoring = True)[0]
-    print("Creating DB_WORKER...")
-    private_instance_dbworkers = launch_ec2_instance(
-        ec2, 
-        config["key_pair_name"], 
-        group_id,
-        private_subnet_id,
-        instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
-        image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
-        public_ip=False,
-        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
-        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_WORKER")], 
-        num_instances=config["instances"]["db_instances"]["n_workers"],
-        enable_detailed_monitoring = True)
     
     
 

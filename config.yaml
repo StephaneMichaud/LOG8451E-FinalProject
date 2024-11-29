@@ -21,13 +21,13 @@ instances:
     n_workers: 2
 
   proxy_instance:
-    proxy_instance_type: "t2.micro"
+    proxy_instance_type: "t2.large"
     proxy_instance_ami: "ami-0887e1d5e322290cf"
   gatekeeper_instances:
     gatekeeper:
-      gatekeeper_instance_type: "t2.micro"
+      gatekeeper_instance_type: "t2.large"
       gatekeeper_instance_ami: "ami-0887e1d5e322290cf"
     trusted_host:
-      trusted_host_instance_type: "t2.micro"
+      trusted_host_instance_type: "t2.large"
       trusted_host_instance_ami: "ami-0887e1d5e322290cf"
 

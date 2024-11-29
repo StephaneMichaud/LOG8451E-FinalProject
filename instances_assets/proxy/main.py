@@ -39,7 +39,7 @@ async def read_db():
     if lbmode == 0: # manager only
       response = requests.get(f"http://{db_manager_private_ip}/read").json()
     elif lbmode == 1: # random choice
-        choice = random.randint(0, len(db_workers_private_ips)) #if we select 0, it the manger, else some worker
+        choice = random.randint(0, len(db_workers_private_ips)) #if we select 0, it the manager, else some worker
         if choice > 0: 
             choice = choice -1
             response = requests.get(f"http://{db_workers_private_ips[choice]}/read").json()
@@ -96,18 +96,18 @@ async def write_db(first_name: str, last_name: str):
     response = requests.post(f"http://{db_manager_private_ip}/write", params={"first_name": first_name, "last_name": last_name})
 
     if response.ok:
-        worker_errors = []
-        for worker_ip in db_workers_private_ips:
-            try:
-                worker_response = requests.post(f"http://{worker_ip}/write", params={"first_name": first_name, "last_name": last_name})
-                if not worker_response.ok:
-                    worker_errors.append(f"Worker {worker_ip} failed to update: {worker_response.text}")
-            except requests.RequestException as e:
-                worker_errors.append(f"Failed to send write request to worker {worker_ip}: {str(e)}")
-                logger.error(f"Failed to send write request to worker {worker_ip}: {str(e)}")
+        # worker_errors = []
+        # for worker_ip in db_workers_private_ips:
+        #     try:
+        #         worker_response = requests.post(f"http://{worker_ip}/write", params={"first_name": first_name, "last_name": last_name})
+        #         if not worker_response.ok:
+        #             worker_errors.append(f"Worker {worker_ip} failed to update: {worker_response.text}")
+        #     except requests.RequestException as e:
+        #         worker_errors.append(f"Failed to send write request to worker {worker_ip}: {str(e)}")
+        #         logger.error(f"Failed to send write request to worker {worker_ip}: {str(e)}")
         
-        if worker_errors:
-            return {"error": "Some workers failed to update", "details": worker_errors}, 500
+        # if worker_errors:
+        #     return {"error": "Some workers failed to update", "details": worker_errors}, 500
         return response.json()
     else:
         return response.json(), response.status_code
@@ -150,8 +150,6 @@ if __name__ == "__main__":
         aws_session_token = aws_session_token,
         region_name=aws_region
     )
-    
-    ec2 = boto3.client("ec2", )
     # Get private IP of first instance with the tag ROLE = DB_MANAGER
     response = ec2.describe_instances(Filters=[
         {

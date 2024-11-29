@@ -1,0 +1,7 @@
+fastapi 
+uvicorn 
+requests 
+boto3 
+PyMySQL
+ec2_metadata
+python-dotenv
