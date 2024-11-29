@@ -164,13 +164,16 @@ try:
 
     print("=================================================================")
     print("All instances are ready!")
-
+    print("=================================================================")
+    print("=================================================================")
+    input("Press Enter to start the benchmarks...")
     gatekeeper_instance = ec2.describe_instances(InstanceIds=[public_instance_gatekeeper[0]])['Reservations'][0]['Instances'][0]
     gatekeeper_public_ip = gatekeeper_instance.get('PublicIpAddress')
     print(f"Gatekeeper public IP: {gatekeeper_public_ip}")
     time_before_benchmarks = datetime.datetime.now(datetime.timezone.utc)
     asyncio.run(benchmarks_cluster(
-        gatekeeper_public_ip, 
+        benchmark_path=config["benchmarks_download_local_path"],
+        gate_keeper_ip=gatekeeper_public_ip, 
         wait_time_between_mode_s=config["cluster_benchmark"]["wait_time_s"]))
     db_instances_dict = {
         "db_manager": private_instance_dbmanager[0]
