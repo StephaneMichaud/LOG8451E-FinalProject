@@ -34,26 +34,7 @@ There is also a dockerfile provided
 
 ## Usage
 
-[Provide instructions on how to run the project, including any necessary commands or scripts]
-
-## Project Structure
-
-[Describe the main directories and files in the project]
-
-
-LOG8451E-FinalProject/
-├── data/
-├── src/
-├── tests/
-├── docs/
-├── requirements.txt
-└── README.md
-
-
-## Features
-
-- [List key features of the project]
-
+python main.py
 
 ## License
 

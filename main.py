@@ -78,19 +78,6 @@ try:
     vpc_id, public_subnet_id, private_subnet_id = create_vpc_and_nat(ec2)
     group_id = create_security_group(ec2, vpc_id, config["security_group_name"], "solo security group")
 
-    print("Creating DB_WORKERS...")
-    private_instance_dbworkers = launch_ec2_instance(
-        ec2, 
-        config["key_pair_name"], 
-        group_id,
-        private_subnet_id,
-        instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
-        image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
-        public_ip=False,
-        user_data = get_db_worker_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
-        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_WORKER")], 
-        num_instances=config["instances"]["db_instances"]["n_workers"],
-        enable_detailed_monitoring = True)
     print("Creating DB_MANAGER...")
     private_instance_dbmanager = launch_ec2_instance(
         ec2, 
@@ -104,6 +91,21 @@ try:
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_MANAGER")], 
         num_instances=1,
         enable_detailed_monitoring = True)[0]
+    
+    
+    print("Creating DB_WORKERS...")
+    private_instance_dbworkers = launch_ec2_instance(
+        ec2, 
+        config["key_pair_name"], 
+        group_id,
+        private_subnet_id,
+        instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
+        image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
+        public_ip=False,
+        user_data = get_db_worker_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
+        tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_WORKER")], 
+        num_instances=config["instances"]["db_instances"]["n_workers"],
+        enable_detailed_monitoring = True)
     
     
 
@@ -163,14 +165,14 @@ try:
     wait_for_tag_value(ec2, public_instance_gatekeeper[0], "STATUS", "READY")
 
     print("=================================================================")
-    print("All instances are ready!")
+    print("All instances are ready!!!")
     print("=================================================================")
-    print("=================================================================")
-    input("Press Enter to start the benchmarks...")
     gatekeeper_instance = ec2.describe_instances(InstanceIds=[public_instance_gatekeeper[0]])['Reservations'][0]['Instances'][0]
     gatekeeper_public_ip = gatekeeper_instance.get('PublicIpAddress')
     print(f"Gatekeeper public IP: {gatekeeper_public_ip}")
     time_before_benchmarks = datetime.datetime.now(datetime.timezone.utc)
+
+    # Starting benchmarks
     asyncio.run(benchmarks_cluster(
         benchmark_path=config["benchmarks_download_local_path"],
         gate_keeper_ip=gatekeeper_public_ip, 
@@ -178,6 +180,7 @@ try:
     db_instances_dict = {
         "db_manager": private_instance_dbmanager[0]
     }
+    #creating map for db workers to be used in plotting ressources usage
     worker_id = 1
     for worker in private_instance_dbworkers:
         db_instances_dict[f"db_worker_{worker_id}"] = worker[0]

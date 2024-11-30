@@ -34,10 +34,10 @@ async def call_post_http(session, public_ip_adress, call_path, args:dict):
         async with session.post(public_ip_adress + "/" + call_path, params=args, headers=headers) as response:
             status_code = response.status
             response_json = await response.json()
-            return status_code, response_json
+            return status_code, response_json, datetime.datetime.now(datetime.timezone.utc)
     except Exception as e:
         print("error:", e)
-        return None, str(e)
+        return None, str(e), datetime.datetime.now(datetime.timezone.utc)
     
 async def call_write_actor(session, public_ip_adress, call_path):
     first_name, last_name = generate_random_name()
@@ -45,8 +45,8 @@ async def call_write_actor(session, public_ip_adress, call_path):
         "first_name": first_name,
         "last_name": last_name
     }
-    status_code, response_json = await call_post_http(session, public_ip_adress, call_path, args)
-    return status_code, response_json, datetime.datetime.now(datetime.timezone.utc)
+    status_code, response_json, time = await call_post_http(session, public_ip_adress, call_path, args)
+    return status_code, response_json, time
 
 # Function to benchmark the cluster
 async def benchmark_read_cluster(benchmark_path:Path, gate_keeper_url, num_requests=1000):
@@ -58,7 +58,8 @@ async def benchmark_read_cluster(benchmark_path:Path, gate_keeper_url, num_reque
         results = await asyncio.gather(*tasks)
     
     # Write results to file
-    results_file = benchmark_path / "read_results.txt"
+    results_file = Path(benchmark_path, "read_results.txt")
+    print(f"Results written to {results_file}")
     with open(results_file, 'a') as f:
         for status_code, response, timestamp in results:
             f.write(f"{timestamp},{status_code},{response}\n")
@@ -77,7 +78,8 @@ async def benchmark_write_cluster(benchmark_path:Path, gate_keeper_url, num_requ
         tasks = [call_write_actor(session, gate_keeper_url, "write") for _ in range(num_requests)]
         results = await asyncio.gather(*tasks)
     # Write results to file
-    results_file = benchmark_path / "write_results.txt"
+    results_file = Path(benchmark_path, "write_results.txt")
+    print(f"Results written to {results_file}")
     with open(results_file, 'a') as f:
         for status_code, response, timestamp in results:
             f.write(f"{timestamp},{status_code},{response}\n")
@@ -97,32 +99,33 @@ async def switch_proxy_mode(gate_keeper_url, mode = 0):
 
 async def benchmarks_cluster(benchmark_path:Path, gate_keeper_ip, num_requests=1000, wait_time_between_mode_s = 60):
     gate_keeper_url = f"http://{gate_keeper_ip}:80"
-    assert(benchmark_path.exists(), f"Benchmark path {benchmark_path} does not exist")
-    assert(benchmark_path.is_dir(), f"Benchmark path {benchmark_path} is not a directory")
+    benchmark_path = Path(benchmark_path)
+    assert benchmark_path.exists(), f"Benchmark path {benchmark_path} does not exist"
+    assert benchmark_path.is_dir(), f"Benchmark path {benchmark_path} is not a directory"
     try:
         print("Waiting initially to not have any metrics from the installation")
-        time.sleep(2*wait_time_between_mode_s)
-        print("****************************************")
         time.sleep(wait_time_between_mode_s)
+        print("****************************************")
+        await switch_proxy_mode(gate_keeper_url, 0)
         await asyncio.gather(
-            #benchmark_write_cluster(gate_keeper_url, num_requests),
-            benchmark_read_cluster(gate_keeper_url, num_requests)
+            benchmark_write_cluster(benchmark_path, gate_keeper_url, num_requests),
+            benchmark_read_cluster(benchmark_path, gate_keeper_url, num_requests)
         )
         print("Waiting after read/write requests mode 0...")
         print("****************************************")
         time.sleep(wait_time_between_mode_s)
         await switch_proxy_mode(gate_keeper_url, 1)
         await asyncio.gather(
-            #benchmark_write_cluster(gate_keeper_url, num_requests),
-            benchmark_read_cluster(gate_keeper_url, num_requests)
+            benchmark_write_cluster(benchmark_path, gate_keeper_url, num_requests),
+            benchmark_read_cluster(benchmark_path, gate_keeper_url, num_requests)
         )
         print("Waiting after read/write requests mode 1...")
         print("****************************************")
         time.sleep(wait_time_between_mode_s)
         await switch_proxy_mode(gate_keeper_url, 2)
         await asyncio.gather(
-            #benchmark_write_cluster(gate_keeper_url, num_requests),
-            benchmark_read_cluster(gate_keeper_url, num_requests)
+            benchmark_write_cluster(benchmark_path, gate_keeper_url, num_requests),
+            benchmark_read_cluster(benchmark_path, gate_keeper_url, num_requests)
         )
         print("Waiting after read/write requests mode 2...")
         time.sleep(wait_time_between_mode_s)

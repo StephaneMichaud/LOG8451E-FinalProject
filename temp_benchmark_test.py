@@ -13,7 +13,8 @@ from aws_utils.create_s3_bucket import create_s3_bucket
 from aws_utils.upload_download_s3 import upload_folder_to_s3, download_folder_from_s3
 from aws_utils.instance_sync import wait_for_tag_value
 
-from instances_assets.db_instance.db_user_data import get_db_user_data
+from instances_assets.db_instance.db_manager.db_manager_data import get_db_manager_data
+from instances_assets.db_instance.db_worker.db_worker_data import get_db_worker_data
 from instances_assets.proxy.proxy_user_data import get_proxy_data
 from instances_assets.gatekeeper.trusted_host.trusted_host_user_data import get_trusted_host_data
 from benchmarks_utils.benchmarking import benchmarks_cluster
@@ -69,10 +70,12 @@ try:
         aws_session_token = os.environ.get('AWS_SESSION_TOKEN'),
         region_name = default_region,
     )
-    print("Creating Db manager...")
+    print("Creating Key pair and security group...")
     key_pair_path = generate_key_pair(ec2, config["key_pair_name"])
     vpc_id, public_subnet_id, private_subnet_id = None, None, None#create_vpc_and_nat(ec2)
     group_id = create_security_group(ec2, vpc_id, config["security_group_name"], "solo security group")
+
+    print("Creating DB_MANAGER...")
     private_instance_dbmanager = launch_ec2_instance(
         ec2, 
         config["key_pair_name"], 
@@ -81,12 +84,13 @@ try:
         instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
         image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
         public_ip=True,
-        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
+        user_data = get_db_manager_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_MANAGER")], 
         num_instances=1,
         enable_detailed_monitoring = True)[0]
     
-    print("Creating DB_WORKER...")
+    
+    print("Creating DB_WORKERS...")
     private_instance_dbworkers = launch_ec2_instance(
         ec2, 
         config["key_pair_name"], 
@@ -95,13 +99,11 @@ try:
         instance_type=config["instances"]["db_instances"]["db_worker_instance_type"],
         image_id=config["instances"]["db_instances"]["db_worker_instance_ami"],
         public_ip=True,
-        user_data = get_db_user_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
+        user_data = get_db_worker_data(s3_bucket_name=config["s3_bucket_name"], benchmark_upload_path=config["benchmarks_s3_path"]), 
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "DB_WORKER")], 
         num_instances=config["instances"]["db_instances"]["n_workers"],
         enable_detailed_monitoring = True)
     
-    
-
     print("Creating PROXY...")
     private_instance_proxy= launch_ec2_instance(
         ec2, 
@@ -115,12 +117,23 @@ try:
         tags=[("STATUS", "BOOTING-UP"), ("ROLE", "PROXY")], 
         num_instances=1)[0]
     
-    public_instance_cluster0 = [private_instance_proxy, private_instance_dbmanager] + private_instance_dbworkers
-    wait_for_tag_value(ec2, private_instance_proxy[0], "STATUS", "READY")
-    wait_for_tag_value(ec2, private_instance_dbmanager[0], "STATUS", "READY")
-    for instance in private_instance_dbworkers:
+    public_instance_cluster0 = [private_instance_dbmanager] + private_instance_dbworkers + [private_instance_proxy]
+    for instance in public_instance_cluster0:
         wait_for_tag_value(ec2, instance[0], "STATUS", "READY")
     input("Press Enter to continue...")
+    gatekeeper_instance = ec2.describe_instances(InstanceIds=[private_instance_proxy[0]])['Reservations'][0]['Instances'][0]
+    gatekeeper_public_ip = gatekeeper_instance.get('PublicIpAddress')
+    print(f"Gatekeeper public IP: {gatekeeper_public_ip}")
+    time_before_benchmarks = datetime.datetime.now(datetime.timezone.utc)
+
+    # Starting benchmarks
+    asyncio.run(benchmarks_cluster(
+        benchmark_path=config["benchmarks_download_local_path"],
+        gate_keeper_ip=gatekeeper_public_ip,
+        wait_time_between_mode_s=config["cluster_benchmark"]["wait_time_s"]))
+    
+    input("Press Enter to continue...")
+
 except Exception as e:
     print(f"Error : {e}")
 finally:

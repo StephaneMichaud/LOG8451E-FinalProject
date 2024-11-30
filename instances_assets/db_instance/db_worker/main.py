@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import uvicorn
 import logging
+from threading import Lock
 from pymysql import connect
 from ec2_metadata import ec2_metadata
 
@@ -23,6 +24,7 @@ async def ping():
 async def read_db():
     message = f"Instance {instance_id} reading now:"
     logger.info(message)
+    response_type = 200
 
     try:
         with connection.cursor() as cursor:
@@ -37,25 +39,34 @@ async def read_db():
     except Exception as e:
         logger.error(f"Error reading from database: {str(e)}")
         message += f"\nError occurred while reading from database: {str(e)}"
+        response_type = 400
+    if response_type == 400:
+        raise HTTPException(status_code=400, detail=message)
     
     return {"message": message}
 
+write_mutex = Lock()
 @app.post("/write")
 async def write_db(first_name: str, last_name: str):
-    message = f"Instance {instance_id} is writing now:"
-    logger.info(message)
-
-    try:
-        with connection.cursor() as cursor:
-            sql = "INSERT INTO actor (first_name, last_name) VALUES (%s, %s)"
-            cursor.execute(sql, (first_name, last_name))
-        connection.commit()
-        message += f"\nSuccessfully added new actor: {first_name} {last_name}"
-        logger.info(f"New actor added: {first_name} {last_name}")
-    except Exception as e:
-        logger.error(f"Error writing to database: {str(e)}")
-        message += f"\nError occurred while writing to database: {str(e)}"
-    
+    with write_mutex:
+        message = f"Instance {instance_id} is writing now:"
+        logger.info(message)
+        response_type = 200
+        try:
+            with connection.cursor() as cursor:
+                sql = "INSERT INTO actor (first_name, last_name) VALUES (%s, %s)"
+                cursor.execute(sql, (first_name, last_name))
+            connection.commit()
+            message += f"\nSuccessfully added new actor: {first_name} {last_name}"
+            logger.info(f"New actor added: {first_name} {last_name}")
+        except Exception as e:
+            logger.error(f"Error writing to database: {str(e)}")
+            message += f"\nError occurred while writing to database: {str(e)}"
+            response_type = 400
+        
+    if response_type == 400:
+        raise HTTPException(status_code=400, detail=message)
+        
     return {"message": message}
 
 if __name__ == "__main__":

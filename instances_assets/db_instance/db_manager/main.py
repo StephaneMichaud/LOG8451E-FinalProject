@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from threading import Lock
+from fastapi import FastAPI, HTTPException
 import uvicorn
 import logging
 from pymysql import connect
@@ -41,8 +42,13 @@ async def read_db():
     except Exception as e:
         logger.error(f"Error reading from database: {str(e)}")
         message += f"\nError occurred while reading from database: {str(e)}"
+        raise HTTPException(status_code=400, detail=message)
     
     return {"message": message}
+
+
+# Create a global mutex for write operations
+write_mutex = Lock()
 
 @app.post("/write")
 async def write_db(first_name: str, last_name: str):
@@ -51,33 +57,34 @@ async def write_db(first_name: str, last_name: str):
     logger.info(message)
 
     try:
-        with connection.cursor() as cursor:
-            sql = "INSERT INTO actor (first_name, last_name) VALUES (%s, %s)"
-            cursor.execute(sql, (first_name, last_name))
-        connection.commit()
-        message += f"\nSuccessfully added new actor: {first_name} {last_name}"
-        logger.info(f"New actor added: {first_name} {last_name}")
-        worker_errors= []
+        with write_mutex:  # Acquire the mutex before writing
+            with connection.cursor() as cursor:
+                sql = "INSERT INTO actor (first_name, last_name) VALUES (%s, %s)"
+                cursor.execute(sql, (first_name, last_name))
+            connection.commit()
+            message += f"\nSuccessfully added new actor: {first_name} {last_name}"
+            logger.info(f"New actor added: {first_name} {last_name}")
+            worker_errors= []
 
-        #replicate write on workers
-        for worker_ip in db_workers_private_ips:
-            try:
-                worker_response = requests.post(f"http://{worker_ip}/write", params={"first_name": first_name, "last_name": last_name})
-                if not worker_response.ok:
-                    worker_errors.append(f"Worker {worker_ip} failed to update: {worker_response.text}")
-            except requests.RequestException as e:
-                worker_errors.append(f"Failed to send write request to worker {worker_ip}: {str(e)}")
-                logger.error(f"Failed to send write request to worker {worker_ip}: {str(e)}")
-        
-        if worker_errors:
-            return {"error": "Some workers failed to update", "details": worker_errors}, 500
+            #replicate write on workers
+            for worker_ip in db_workers_private_ips:
+                try:
+                    worker_response = requests.post(f"http://{worker_ip}/write", params={"first_name": first_name, "last_name": last_name})
+                    if not worker_response.ok:
+                        worker_errors.append(f"Worker {worker_ip} failed to update: {worker_response.text}")
+                except requests.RequestException as e:
+                    worker_errors.append(f"Failed to send write request to worker {worker_ip}: {str(e)}")
+                    logger.error(f"Failed to send write request to worker {worker_ip}: {str(e)}")
+            
+            if worker_errors:
+                raise HTTPException(status_code=400, detail=f"Some workers failed to update: {worker_errors}")
     
     except Exception as e:
         logger.error(f"Error writing to database: {str(e)}")
         message += f"\nError occurred while writing to database: {str(e)}"
+        raise HTTPException(status_code=400, detail=message)
     
     return {"message": message}
-
 if __name__ == "__main__":
     # Run the FastAPI app
      # Create EC2 client
